@@ -36,24 +36,24 @@ export class FeedbackEffects {
     };
   }
   card(event, type, content, duration = 2700) {
-    this.cards.get(event.orderId)?.remove();
+    this.clearCards();
     const node = document.createElement("div"),
       point = this.point(event.orderId);
     node.className = `feedback-card ${type}`;
     node.dataset.feedback = event.feedback;
     node.dataset.orderId = event.orderId;
     node.setAttribute("aria-hidden", "true"); // The main status region announces the same outcome.
-    node.style.left = `${point.x}px`;
-    node.style.top = `${point.y}px`;
     node.style.setProperty("--life", `${duration}ms`);
     if (this.reducedMotion) node.style.animation = "none";
     node.innerHTML = content;
     this.root.append(node);
     this.cards.set(event.orderId, node);
+    document.body.classList.add("has-feedback");
     this.later(() => {
       node.remove();
       if (this.cards.get(event.orderId) === node)
         this.cards.delete(event.orderId);
+      if (!this.cards.size) document.body.classList.remove("has-feedback");
     }, duration);
     return point;
   }
@@ -135,9 +135,15 @@ export class FeedbackEffects {
     }
   }
   clear() {
+    this.clearCards();
     for (const timer of this.timers) clearTimeout(timer);
     this.timers.clear();
     this.cards.clear();
     this.root.replaceChildren();
+  }
+  clearCards() {
+    for (const node of this.cards.values()) node.remove();
+    this.cards.clear();
+    document.body.classList.remove("has-feedback");
   }
 }

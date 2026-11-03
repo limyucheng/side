@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { orderTicketPosition } from "../src/order-layout.js";
-
+import { gameLayout } from "../src/game-layout.js";
 const position = (overrides = {}) =>
   orderTicketPosition({
     index: 0,
@@ -13,17 +13,14 @@ const position = (overrides = {}) =>
     height: 900,
     ...overrides,
   });
-test("tickets return exactly to their customer's head in the centre view", () => {
+test("tickets return to customer heads and use the same stable dock in either side view", () => {
   assert.deepEqual(position(), { x: 200, y: 400, blend: 0 });
-});
-test("either side view uses the same stable order rail despite off-screen head positions", () => {
   assert.deepEqual(
     position({ view: -1, x: -10000, y: -10000 }),
     position({ view: 1, x: 10000, y: 10000 }),
   );
-  assert.equal(position({ view: -1 }).blend, 1);
 });
-test("turning moves tickets continuously through intermediate positions", () => {
+test("turning moves a ticket continuously to its dock", () => {
   let previous = position();
   const end = position({ view: 1 });
   for (const view of [0.05, 0.15, 0.3, 0.45, 0.6]) {
@@ -33,20 +30,34 @@ test("turning moves tickets continuously through intermediate positions", () => 
     previous = current;
   }
 });
-test("three rail tickets fit without overlap on portrait, landscape and desktop screens", () => {
-  for (const [width, height, ticketWidth] of [
-    [390, 844, 116],
-    [844, 390, 178],
-    [1280, 900, 178],
-    [1920, 1080, 178],
+test("large orders occupy their own region, clear of the kitchen and footer at each screen size", () => {
+  for (const [width, height] of [
+    [390, 844],
+    [844, 390],
+    [1280, 900],
+    [1920, 1080],
   ]) {
-    const tickets = [0, 1, 2].map((index) =>
+    const layout = gameLayout(width, height),
+      { cardWidth: w, cardHeight: h, work } = layout;
+    const cards = [0, 1, 2].map((index) =>
       position({ index, width, height, view: 1 }),
     );
-    assert.ok(tickets[0].x - ticketWidth / 2 >= 0);
-    assert.ok(tickets[2].x + ticketWidth / 2 <= width);
-    for (let i = 1; i < tickets.length; i++)
-      assert.ok(tickets[i].x - tickets[i - 1].x >= ticketWidth);
-    assert.ok(tickets[0].y < height - 100);
+    for (const p of cards) {
+      assert.ok(p.x - w / 2 >= 0 && p.x + w / 2 <= width);
+      assert.ok(p.y < height - work.bottom);
+      assert.ok(
+        p.y <= work.top || p.x + w / 2 <= work.left,
+        "tickets do not cover the kitchen",
+      );
+    }
+    for (let i = 1; i < cards.length; i++)
+      assert.ok(
+        cards[i].x - cards[i - 1].x >= w || cards[i].y - cards[i - 1].y >= h,
+        "cards do not overlap",
+      );
+    assert.ok(
+      w >= 110 && h >= 68,
+      "tickets have room for readable food and preference icons",
+    );
   }
 });

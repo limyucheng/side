@@ -1,4 +1,4 @@
-import { HawkerVoices } from "./voices.js";
+import { HawkerAmbience } from "./ambience.js";
 
 // Original eight-bar café groove. All instruments are synthesized locally;
 // no audio downloads, external playback service, or autoplay are needed.
@@ -25,7 +25,7 @@ const MELODY = [
 const STEP = 60 / 96 / 4;
 
 export class GameAudio {
-  constructor({ muted = false, music = true, voices = true } = {}) {
+  constructor({ muted = false, music = true, chatter = true } = {}) {
     this.muted = muted;
     this.musicEnabled = music;
     this.active = false;
@@ -36,18 +36,8 @@ export class GameAudio {
     this.disposed = false;
     this.cueVoices = new Set();
     this.lastCues = new Map();
-    this.voicesEnabled = voices;
-    this.speech = new HawkerVoices((speaking) => {
-      this.speaking = speaking;
-      if (
-        this.music &&
-        this.active &&
-        this.musicEnabled &&
-        !this.muted &&
-        !this.disposed
-      )
-        this.fade(this.music, speaking ? 0.075 : 0.24);
-    });
+    this.chatterEnabled = chatter;
+    this.ambience = new HawkerAmbience();
   }
   unlock() {
     if (this.disposed) return;
@@ -59,7 +49,7 @@ export class GameAudio {
         this.master = this.context.createGain();
         this.master.gain.value = this.muted ? 0 : 0.8;
         this.master.connect(this.context.destination);
-        this.speech.connect(this.context, this.master);
+        this.ambience.connect(this.context, this.master);
         this.music = this.context.createGain();
         this.music.gain.value = 0;
         const warmth = this.context.createBiquadFilter();
@@ -93,15 +83,12 @@ export class GameAudio {
     this.musicEnabled = value;
     this.sync();
   }
-  setVoicesEnabled(value) {
-    this.voicesEnabled = value;
+  setChatterEnabled(value) {
+    this.chatterEnabled = value;
     this.sync();
   }
-  speak(dialogue, options) {
-    this.speech.speak(dialogue, options);
-  }
-  cancelOrder(orderId) {
-    this.speech.cancelOrder(orderId);
+  setRush(value) {
+    this.ambience.setRush(value);
   }
   setActive(value) {
     if (this.active && !value) {
@@ -118,15 +105,15 @@ export class GameAudio {
   }
   sync() {
     if (!this.context || this.disposed) return;
-    this.speech.setState({
+    this.ambience.setState({
       active: this.active,
-      enabled: this.voicesEnabled,
+      enabled: this.chatterEnabled,
       muted: this.muted,
     });
     const playing = this.active && this.musicEnabled && !this.muted;
     if (playing && this.timer === null) {
       this.nextTime = this.context.currentTime + 0.06;
-      this.fade(this.music, this.speaking ? 0.075 : 0.24);
+      this.fade(this.music, 0.24);
       this.schedule();
       this.timer = setInterval(() => this.schedule(), 70);
     } else if (!playing && this.timer !== null) {
@@ -293,6 +280,7 @@ export class GameAudio {
             : 0.08;
     if (now - (this.lastCues.get(type) ?? -100) < cooldown) return;
     this.lastCues.set(type, now);
+    this.ambience.duck();
     const tone = (
       hz,
       delay,
@@ -363,12 +351,12 @@ export class GameAudio {
       this.fade(this.music, 0.09);
       this.duckTimer = setTimeout(() => {
         if (this.active && this.musicEnabled && !this.muted && !this.disposed)
-          this.fade(this.music, this.speaking ? 0.075 : 0.24);
+          this.fade(this.music, 0.24);
       }, 850);
     }
   }
   dispose() {
-    this.speech.dispose();
+    this.ambience.dispose();
     this.disposed = true;
     clearInterval(this.timer);
     clearTimeout(this.duckTimer);

@@ -69,9 +69,29 @@ kbd {
 .world {
   position: absolute;
   inset: 0;
-  background: #d2d4b3;
+  background: transparent;
+  z-index: 0;
+}
+.world-backdrop {
+  position: absolute;
+  inset: -32px;
+  width: calc(100% + 64px);
+  height: calc(100% + 64px);
+  pointer-events: none;
+  filter: blur(20px) brightness(0.9) saturate(0.9);
+  z-index: 0;
+  opacity: 0;
+}
+.world-backdrop[data-ready="true"] {
+  opacity: 1;
 }
 .world canvas {
+  position: fixed;
+  left: 0;
+  top: 0;
+  clip-path: inset(
+    var(--scene-top, 0px) 0 var(--scene-bottom, 0px) var(--scene-left, 0px)
+  );
   display: block;
   width: 100%;
   height: 100%;
@@ -87,7 +107,7 @@ kbd {
       #173b3b50 0%,
       transparent 19%,
       transparent 65%,
-      #172d31b0 100%
+      #172d3140 100%
     ),
     linear-gradient(
       90deg,
@@ -210,7 +230,7 @@ kbd {
   gap: 8px;
 }
 .music-button.is-muted,
-.voices-button.is-muted {
+.chatter-button.is-muted {
   opacity: 0.5;
 }
 .round-button {
@@ -271,6 +291,9 @@ kbd {
   color: var(--cream);
   box-shadow: 0 3px 0 #284c3c33;
   backdrop-filter: blur(6px);
+}
+#app .look-left {
+  left: calc(var(--scene-left, 0px) + 12px);
 }
 .look-left {
   left: 20px;
@@ -1523,7 +1546,7 @@ kbd {
 .feedback-card.rejected {
   background: #864b3bf5;
   border-color: #f5ba91;
-  animation: reject-pop var(--life, 2400ms) both;
+  animation: none;
 }
 .rejected .feedback-kicker {
   color: #ffe2b5;
@@ -1535,7 +1558,7 @@ kbd {
     sans-serif;
   color: #fff0ce;
   margin: 9px 0 7px;
-  max-width: 210px;
+  max-width: none;
 }
 .rejected .reward-detail {
   font-size: 8px;
@@ -1544,7 +1567,7 @@ kbd {
 .feedback-card.customer-loss {
   background: #624b42f5;
   border-color: #d79876;
-  animation: loss-pop var(--life, 3800ms) both;
+  animation: none;
 }
 .customer-loss .feedback-kicker {
   color: #f2bb96;
@@ -2404,116 +2427,367 @@ kbd {
   bottom: 0;
   transform: translateX(-50%);
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+body:not(.ready) #app {
+  background: #193b32;
+}
+.game-hud {
+  top: 18px;
+}
+.floating-ticket {
+  width: 190px;
+  padding: 8px 10px;
+}
+.ticket-name {
+  font-size: 11px;
+}
+.ticket-food {
+  height: 56px;
+  min-width: 52px;
+}
 .floating-ticket[data-docked="true"] {
-  width: 178px;
-  padding: 4px 7px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 3px 6px;
-  border-width: 1px;
-  box-shadow: 0 3px 8px #18352924;
+  width: var(--order-width);
+  height: var(--order-height);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-width: 2px;
+  transform: translate(-50%, -100%);
+  box-shadow: 0 4px 0 #123a2c4d;
 }
 .floating-ticket[data-docked="true"] .ticket-name {
-  gap: 4px;
-  font-size: 7px;
+  width: 100%;
+  font-size: 12px;
+  gap: 6px;
 }
 .floating-ticket[data-docked="true"] .ticket-name > span {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: center;
+  gap: 9px;
 }
 .floating-ticket[data-docked="true"] .ticket-countdown {
-  display: block;
-  font-size: 7px;
-  font-weight: 700;
-  color: #547c50;
+  display: inline;
+  font-size: 12px;
+  font-weight: 800;
+  color: #52764b;
+}
+.floating-ticket[data-docked="true"] .ticket-foods {
+  width: 100%;
+  flex: 1;
+  margin: 3px 0;
+}
+.floating-ticket[data-docked="true"] .ticket-food {
+  width: 64px;
+  min-width: 56px;
+  height: 58px;
+  flex: 0 1 70px;
+}
+.floating-ticket[data-docked="true"] .ticket-warning {
+  display: none;
+}
+.floating-ticket[data-docked="true"] .patience {
+  width: 100%;
+  height: 4px;
+  flex: 0 0 4px;
 }
 .floating-ticket[data-docked="true"][data-urgency="impatient"]
   .ticket-countdown,
 .floating-ticket[data-docked="true"][data-urgency="critical"]
   .ticket-countdown {
-  color: #b35e39;
+  color: #b55e37;
 }
-.floating-ticket[data-docked="true"] .ticket-foods {
+.coffee-order {
+  font-size: 10px;
+  gap: 5px;
+}
+.coffee-order .icon {
+  width: 15px;
+  height: 15px;
+}
+.chilli-pref .icon,
+.greens-pref .icon {
+  width: 14px;
+  height: 14px;
+}
+.game-notice,
+.context-hint {
+  top: auto;
+  bottom: 74px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
   margin: 0;
-  gap: 3px;
+  max-width: min(760px, calc(100% - 28px));
+  min-height: 54px;
+  max-height: 64px;
+  padding: 8px 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  box-sizing: border-box;
 }
-.floating-ticket[data-docked="true"] .ticket-food {
-  width: 31px;
-  min-width: 31px;
-  height: 29px;
+.game-notice.visible {
+  transform: translateX(-50%);
 }
-.floating-ticket[data-docked="true"] .patience {
-  grid-column: 1 / -1;
-  height: 2px;
+.has-notice .context-hint,
+.has-feedback .context-hint,
+.has-feedback .game-notice {
+  visibility: hidden;
+}
+.feedback-card {
+  top: auto;
+  bottom: 74px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(760px, calc(100% - 28px));
+  max-width: none;
+  min-width: 0;
+  height: 64px;
+  padding: 8px 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  border-radius: 9px;
+  animation: none;
+}
+.feedback-card .reward-amount,
+.feedback-card .missed-amount {
+  font-size: 29px;
   margin: 0;
 }
-.floating-ticket[data-docked="true"] .ticket-warning {
-  display: none;
+.feedback-card .reward-detail,
+.feedback-card .remaining-dishes,
+.feedback-card .satisfaction-loss {
+  font-size: 12px;
+  margin: 0;
 }
-.floating-ticket[data-docked="true"] .chilli-pref {
-  padding: 1px;
-  font-size: 8px;
+.feedback-card .remaining-dishes,
+.feedback-card .lost-streak {
+  margin: 0;
 }
-.floating-ticket[data-docked="true"] .chilli-pref .icon {
-  width: 8px;
-  height: 8px;
+.feedback-card .missed-amount > small {
+  display: inline;
+  margin: 0;
+  font-size: 11px;
 }
-.floating-ticket[data-docked="true"] .greens-pref {
-  padding: 1px;
+.feedback-card .streak-reward {
+  margin: 0;
+  padding: 5px 8px;
 }
-.floating-ticket[data-docked="true"] .greens-pref .icon {
-  width: 8px;
-  height: 8px;
+.feedback-card .rejection-reason {
+  font-size: 14px;
+  margin: 0;
+  line-height: 1.35;
 }
-.floating-ticket[data-docked="true"] .coffee-order {
-  gap: 2px;
-  font-size: 6px;
-  padding: 1px;
+.shift-score strong > span {
+  font-size: 10px;
+  opacity: 0.8;
 }
-.floating-ticket[data-docked="true"] .coffee-order .icon {
-  width: 8px;
-  height: 8px;
+.look-arrow {
+  top: calc(
+    var(--scene-top, 0px) +
+      (100% - var(--scene-top, 0px) - var(--scene-bottom, 0px)) / 2
+  );
 }
-.floating-ticket[data-docked="true"] .ticket-food > b {
-  padding: 1px;
-  top: 4px;
+.game-footer {
+  bottom: 16px;
 }
-.floating-ticket[data-docked="true"] .ticket-food > b > .icon {
-  width: 10px;
-  height: 10px;
+.drag-label {
+  top: auto;
+  bottom: 148px;
 }
 @media (max-width: 650px) {
+  .game-hud {
+    top: 16px;
+  }
+  .floating-ticket {
+    width: 108px;
+    padding: 5px;
+  }
+  .ticket-name {
+    font-size: 9px;
+  }
+  .ticket-food {
+    height: 42px;
+    min-width: 38px;
+  }
   .floating-ticket[data-docked="true"] {
-    width: 116px;
-    padding: 4px 5px;
-    display: block;
+    padding: 6px;
   }
   .floating-ticket[data-docked="true"] .ticket-name {
-    font-size: 6px;
-    margin-bottom: 2px;
+    font-size: 9px;
+    gap: 2px;
   }
   .floating-ticket[data-docked="true"] .ticket-name > span {
-    flex-direction: row;
-    align-items: center;
-    gap: 3px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
   }
   .floating-ticket[data-docked="true"] .ticket-countdown {
-    font-size: 6px;
-  }
-  .floating-ticket[data-docked="true"] .ticket-foods {
-    margin-bottom: 3px;
-  }
-}
-@media (max-height: 500px) and (min-width: 651px) {
-  .floating-ticket[data-docked="true"] {
-    padding: 3px 6px;
+    font-size: 11px;
   }
   .floating-ticket[data-docked="true"] .ticket-food {
-    height: 24px;
-    width: 28px;
-    min-width: 28px;
+    width: 43px;
+    min-width: 38px;
+    height: 44px;
   }
+  .coffee-order {
+    font-size: 8px;
+    gap: 2px;
+  }
+  .coffee-order .icon {
+    width: 11px;
+    height: 11px;
+  }
+  .chilli-pref .icon,
+  .greens-pref .icon {
+    width: 11px;
+    height: 11px;
+  }
+  .game-notice,
+  .context-hint {
+    font-size: 11px;
+    width: calc(100% - 28px);
+  }
+  .context-hint > span {
+    display: none;
+  }
+  .feedback-card {
+    gap: 8px;
+    padding: 6px 10px;
+    flex-wrap: wrap;
+    align-content: center;
+  }
+  .feedback-card .feedback-kicker {
+    font-size: 9px;
+  }
+  .feedback-card .reward-amount,
+  .feedback-card .missed-amount {
+    font-size: 25px;
+  }
+  .feedback-card .reward-detail,
+  .feedback-card .remaining-dishes,
+  .feedback-card .satisfaction-loss {
+    font-size: 10px;
+  }
+  .feedback-card .rejection-reason {
+    font-size: 12px;
+  }
+  .feedback-card .streak-reward {
+    font-size: 8px;
+    padding: 3px 5px;
+  }
+  .stall-state {
+    display: none;
+  }
+  .feedback-card.rejected {
+    flex-direction: column;
+    gap: 3px;
+    padding: 5px 10px;
+  }
+  .feedback-card.rejected .feedback-kicker {
+    display: none;
+  }
+  .feedback-card.customer-loss {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 3px 10px;
+  }
+  .feedback-card.customer-loss .feedback-kicker {
+    display: none;
+  }
+  .feedback-card.customer-loss .missed-amount {
+    grid-row: 1 / 3;
+    font-size: 23px;
+  }
+  .feedback-card.customer-loss .satisfaction-loss,
+  .feedback-card.customer-loss .lost-streak {
+    grid-column: 2;
+  }
+}
+#app[data-layout="landscape"] .floating-ticket {
+  width: 160px;
+}
+#app[data-layout="landscape"] .floating-ticket:not([data-docked="true"]) {
+  padding: 5px 8px;
+}
+#app[data-layout="landscape"]
+  .floating-ticket:not([data-docked="true"])
+  .ticket-food {
+  height: 38px;
+  min-width: 40px;
+}
+#app[data-layout="landscape"]
+  .floating-ticket:not([data-docked="true"])
+  .ticket-name {
+  font-size: 10px;
+}
+#app[data-layout="landscape"] .floating-ticket[data-docked="true"] {
+  width: var(--order-width);
+  padding: 4px 8px;
+}
+#app[data-layout="landscape"]
+  .floating-ticket[data-docked="true"]
+  .ticket-name {
+  font-size: 11px;
+}
+#app[data-layout="landscape"]
+  .floating-ticket[data-docked="true"]
+  .ticket-countdown {
+  font-size: 11px;
+}
+#app[data-layout="landscape"]
+  .floating-ticket[data-docked="true"]
+  .ticket-food {
+  height: 34px;
+  min-width: 44px;
+}
+#app[data-layout="landscape"] .game-notice,
+#app[data-layout="landscape"] .context-hint,
+#app[data-layout="landscape"] .feedback-card {
+  bottom: 44px;
+  min-height: 40px;
+  max-height: 40px;
+  height: 40px;
+  font-size: 11px;
+  padding: 5px 10px;
+}
+#app[data-layout="landscape"] .feedback-card {
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+#app[data-layout="landscape"] .feedback-kicker,
+#app[data-layout="landscape"] .feedback-card.rejected .reward-detail {
+  display: none;
+}
+#app[data-layout="landscape"] .feedback-card .reward-amount {
+  font-size: 24px;
+}
+#app[data-layout="landscape"] .feedback-card .rejection-reason {
+  font-size: 12px;
+}
+#app[data-layout="landscape"] .game-footer {
+  bottom: 8px;
+}
+#app[data-layout="landscape"] .camera-compass button {
+  padding: 5px 10px;
+}
+#app[data-layout="landscape"] .stall-state {
+  display: none;
+}
+#app[data-layout="landscape"] .drag-label {
+  bottom: 98px;
 }
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { cookPhase, customerPhase } from "./game.js";
+import { kitchenViewport } from "./game-layout.js";
 
 const C = {
   cream: 0xf2dfb8,
@@ -40,7 +41,7 @@ export class StallScene {
     this.ticketCamera = this.camera.clone();
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
-      alpha: false,
+      alpha: true,
       powerPreference: "high-performance",
     });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.65));
@@ -54,6 +55,11 @@ export class StallScene {
       "Interactive 3D hawker stall. Drag ingredients into equipment, then drag finished dishes to customers. Use A and D to look around.",
     );
     this.renderer.domElement.tabIndex = 0;
+    this.backdrop = document.createElement("canvas");
+    this.backdrop.className = "world-backdrop";
+    this.backdrop.setAttribute("aria-hidden", "true");
+    this.backdropContext = this.backdrop.getContext("2d", { alpha: false });
+    container.before(this.backdrop);
     container.append(this.renderer.domElement);
     this.materials = new Map();
     this.objects = new Map();
@@ -731,7 +737,7 @@ export class StallScene {
       label: "Fresh brew · drag to the kopi urn to refill",
       draggable: true,
     });
-    const bin = this.group(this.scene, -2.9, 0, 3.05);
+    const bin = this.group(this.scene, -2.55, 0.65, 2.85);
     this.cylinder(bin, 0.36, 0.3, 0.75, 0x6c846f, 0, 0.4, 0);
     this.cylinder(bin, 0.41, 0.39, 0.06, 0x4c6759, 0, 0.8, 0);
     this.text(bin, "BIN", 0.35, 0.18, 0, 0.45, 0.35, {
@@ -1038,10 +1044,7 @@ export class StallScene {
     const customer = this.customers.get(id);
     if (!customer) return null;
     const p = customer.group.localToWorld(V(0, 2.05, 0)).project(this.camera);
-    return {
-      x: (p.x * 0.5 + 0.5) * this.width,
-      y: (-p.y * 0.5 + 0.5) * this.height,
-    };
+    return this.screenPoint(p);
   }
   react(id, type) {
     const customer = this.customers.get(id);
@@ -1062,22 +1065,104 @@ export class StallScene {
     this.renderer.domElement.setPointerCapture(event.pointerId);
   }
   resize() {
-    const { width, height } = this.container.getBoundingClientRect();
-    this.width = width;
-    this.height = height;
-    this.renderer.setSize(width, height);
-    this.camera.aspect = width / height;
+    const { width, height, left, top } =
+      this.container.parentElement.getBoundingClientRect();
+    this.viewportWidth = width;
+    this.viewportHeight = height;
+    this.viewportLeft = left;
+    this.viewportTop = top;
+    // Station changes never resize (and clear) the WebGL drawing buffer.
+    if (this.canvasWidth !== width || this.canvasHeight !== height) {
+      this.renderer.setSize(width, height);
+      this.canvasWidth = width;
+      this.canvasHeight = height;
+      this.backdrop.width = Math.ceil(width / 4);
+      this.backdrop.height = Math.ceil(height / 4);
+    }
+    this.updateViewport();
+    if (this.hasRendered) this.renderFrame();
+  }
+  updateViewport() {
+    const area = kitchenViewport(
+      this.viewportWidth,
+      this.viewportHeight,
+      this.viewCurrent,
+      !this.game || this.game.status === "ready",
+    );
+    this.workViewport = area;
+    this.width = area.width;
+    this.height = area.height;
+    this.offsetX = this.viewportLeft + area.left;
+    this.offsetY = this.viewportTop + area.top;
+    Object.assign(this.container.style, {
+      inset: `${area.top}px auto auto ${area.left}px`,
+      width: `${area.width}px`,
+      height: `${area.height}px`,
+    });
+    const app = this.container.parentElement;
+    app.style.setProperty("--scene-left", `${area.left}px`);
+    app.style.setProperty("--scene-top", `${area.top}px`);
+    app.style.setProperty(
+      "--scene-bottom",
+      `${this.viewportHeight - area.bottom}px`,
+    );
+    this.camera.aspect = area.width / area.height;
     this.camera.fov = Math.min(
       130,
       THREE.MathUtils.radToDeg(
         2 *
           Math.atan(
-            Math.tan(THREE.MathUtils.degToRad(height < 500 ? 47 : 42)) /
+            Math.tan(THREE.MathUtils.degToRad(area.height < 500 ? 47 : 42)) /
               this.camera.aspect,
           ),
       ),
     );
-    this.camera.updateProjectionMatrix();
+    // Extend the same perspective behind the HUD. The visible work region
+    // retains its framing while the surround reveals real roof/floor scenery.
+    this.camera.setViewOffset(
+      area.width,
+      area.height,
+      -area.left,
+      -area.top,
+      this.viewportWidth,
+      this.viewportHeight,
+    );
+  }
+  screenPoint(point) {
+    return {
+      x: this.viewportLeft + (point.x * 0.5 + 0.5) * this.viewportWidth,
+      y: this.viewportTop + (-point.y * 0.5 + 0.5) * this.viewportHeight,
+    };
+  }
+  getWorkRect() {
+    return {
+      left: this.offsetX,
+      top: this.offsetY,
+      width: this.width,
+      height: this.height,
+      right: this.offsetX + this.width,
+      bottom: this.offsetY + this.height,
+    };
+  }
+  renderFrame() {
+    const renderer = this.renderer;
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, this.viewportWidth, this.viewportHeight);
+    renderer.render(this.scene, this.camera);
+    // Copy the current rendered frame directly, at low resolution. The browser
+    // blurs it behind the HUD; a second 3D scene render is unnecessary.
+    if (this.backdropContext) {
+      const canvas = renderer.domElement;
+      this.backdropContext.drawImage(
+        canvas,
+        0,
+        0,
+        this.backdrop.width,
+        this.backdrop.height,
+      );
+      this.backdrop.dataset.ready = "true";
+    }
+    this.hasRendered = true;
   }
   info(object) {
     let node = object;
@@ -1089,12 +1174,14 @@ export class StallScene {
     return null;
   }
   hit(x, y, { drop = false } = {}) {
-    const rect = this.renderer.domElement.getBoundingClientRect();
+    const rect = this.getWorkRect();
     this.pointer.set(
-      ((x - rect.left) / rect.width) * 2 - 1,
-      (-(y - rect.top) / rect.height) * 2 + 1,
+      ((x - this.viewportLeft) / this.viewportWidth) * 2 - 1,
+      (-(y - this.viewportTop) / this.viewportHeight) * 2 + 1,
     );
     this.ray.setFromCamera(this.pointer, this.camera);
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom)
+      return null;
     const hits = this.ray.intersectObjects([...this.objects.values()], true);
     for (const hit of hits) {
       const result = this.info(hit.object);
@@ -1162,10 +1249,10 @@ export class StallScene {
       }
       this.lastPointer = { x: e.clientX, y: e.clientY };
       if (this.held && this.clock - (this.lastEdgeTurn ?? -10) > 0.7) {
-        if (e.clientX < 45) {
+        if (e.clientX < this.offsetX + 36) {
           this.setView(this.view - 1);
           this.lastEdgeTurn = this.clock;
-        } else if (e.clientX > this.width - 45) {
+        } else if (e.clientX > this.offsetX + this.width - 36) {
           this.setView(this.view + 1);
           this.lastEdgeTurn = this.clock;
         }
@@ -1586,24 +1673,25 @@ export class StallScene {
             .localToWorld((g.userData.anchor || V(0, 0.2, 0)).clone())
             .project(this.ticketCamera)
         : null;
+      const point = this.screenPoint(p);
+      const labelPoint = this.screenPoint(label);
+      const counterPoint = counterLabel ? this.screenPoint(counterLabel) : null;
       entries.push({
         ...g.userData.interaction,
         name,
-        x: (p.x * 0.5 + 0.5) * this.width,
-        y: (-p.y * 0.5 + 0.5) * this.height,
-        labelX: (label.x * 0.5 + 0.5) * this.width,
-        labelY: (-label.y * 0.5 + 0.5) * this.height,
-        counterLabelX: counterLabel
-          ? (counterLabel.x * 0.5 + 0.5) * this.width
-          : null,
-        counterLabelY: counterLabel
-          ? (-counterLabel.y * 0.5 + 0.5) * this.height
-          : null,
+        x: point.x,
+        y: point.y,
+        labelX: labelPoint.x,
+        labelY: labelPoint.y,
+        counterLabelX: counterPoint?.x ?? null,
+        counterLabelY: counterPoint?.y ?? null,
         visible:
           p.z < 1 &&
           p.z > -1 &&
-          Math.abs(p.x) < 1.1 &&
-          Math.abs(p.y) < 1.1 &&
+          point.x >= this.offsetX &&
+          point.x <= this.offsetX + this.width &&
+          point.y >= this.offsetY &&
+          point.y <= this.offsetY + this.height &&
           (!customer || (customer.arrived && !customer.leaving)),
         arrived: customer?.arrived,
       });
@@ -1623,6 +1711,7 @@ export class StallScene {
     this.clock += dt;
     const t = this.clock;
     this.viewCurrent = ease(this.viewCurrent, this.view, dt, 5);
+    this.updateViewport();
     const v = this.viewCurrent;
     const angle = v * 1.4;
     this.camera.position.set(0, 2.45, 1.65);
@@ -1726,7 +1815,7 @@ export class StallScene {
         ring.scale.setScalar(1 + Math.sin(t * 9) * 0.07);
         ring.material.opacity = 0.65 + Math.sin(t * 9) * 0.2;
       }
-    this.renderer.render(this.scene, this.camera);
+    this.renderFrame();
     this.project();
   }
   walk(group, t, amplitude) {
@@ -1771,5 +1860,7 @@ export class StallScene {
     for (const mat of this.materials.values()) mat.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
+    this.backdrop.remove();
+    this.backdrop.width = this.backdrop.height = 1;
   }
 }

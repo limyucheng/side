@@ -1,5 +1,3 @@
-import voiceDurations from "./voice-durations.js";
-
 export const COMPLAINTS = {
   office: {
     impatient: [
@@ -42,11 +40,8 @@ export function impatientDialogue(type, urgent, variation = 0) {
   const phase = urgent ? "critical" : "impatient";
   const lines = COMPLAINTS[speaker][phase];
   const index = Math.abs(Math.trunc(variation)) % lines.length;
-  const file = `${speaker}-${phase}-${index}-sg2.mp3`;
   return {
     text: lines[index],
-    clip: `/audio/voices/${file}`,
-    duration: voiceDurations[file] || 6,
     urgent,
   };
 }

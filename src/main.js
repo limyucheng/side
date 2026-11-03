@@ -1,4 +1,10 @@
-import { HawkerGame, UPGRADES, cookPhase, customerPhase } from "./game.js";
+import {
+  HawkerGame,
+  UPGRADES,
+  cookPhase,
+  customerPhase,
+  rushIntensity,
+} from "./game.js";
 import { StallScene } from "./scene.js";
 import { StallInteractions } from "./interactions.js";
 import { icon, food } from "./art.js";
@@ -6,6 +12,7 @@ import { GameAudio } from "./audio.js";
 import { FeedbackEffects } from "./feedback.js";
 import { impatientDialogue } from "./dialogue.js";
 import { orderTicketPosition } from "./order-layout.js";
+import { gameLayout } from "./game-layout.js";
 
 let saved = {};
 try {
@@ -27,7 +34,7 @@ let game = freshGame(),
   effects;
 let muted = saved.sound === false,
   musicEnabled = saved.music !== false,
-  voicesEnabled = saved.voices !== false,
+  chatterEnabled = saved.chatter ?? saved.voices ?? true,
   modal = null,
   resumeAfterModal = false,
   selected = null,
@@ -35,7 +42,7 @@ let muted = saved.sound === false,
 const audio = new GameAudio({
   muted,
   music: musicEnabled,
-  voices: voicesEnabled,
+  chatter: chatterEnabled,
 });
 let noticeUntil = 0,
   lastUi = 0,
@@ -62,8 +69,8 @@ const put = (id, text) => {
 $("app").innerHTML = `
   <div id="world" class="world"></div><div class="scene-vignette"></div>
   <header class="game-hud"><div class="game-brand"><span class="brand-mark">${icon("bowl")}</span><div><h1>HAWKER<span>RUSH<span class="title-dot">!</span></span></h1><p>TIONG BAHRU · SINGAPORE</p></div></div>
-    <div class="shift-hud"><div class="shift-time">${icon("clock")}<strong id="time">04:00</strong></div><span class="hud-divider"></span><div class="shift-coins">${icon("money")}<strong id="coins">$0.00</strong></div><span class="hud-divider"></span><div class="shift-score">${icon("star")}<strong id="score">0<span>/8</span></strong></div></div>
-    <div class="hud-actions"><button data-action="sound" id="sound" class="round-button" aria-label="Mute all audio">${icon("sound")}</button><button data-action="music" id="music" class="round-button music-button" aria-label="Mute music" aria-pressed="true" title="Mute background music">${icon("music")}</button><button data-action="voices" id="voices" class="round-button voices-button" aria-label="Mute NPC voices and hawker chatter" aria-pressed="true" title="AI NPC voices & hawker chatter">${icon("voices")}</button><button data-action="help" class="round-button" aria-label="How to play">${icon("help")}</button><button data-action="pause" id="pause" class="round-button" aria-label="Pause game">${icon("pause")}</button><button data-action="fullscreen" class="round-button fullscreen-button" aria-label="Toggle full screen">⛶</button></div>
+    <div class="shift-hud"><div class="shift-time">${icon("clock")}<strong id="time">04:00</strong></div><span class="hud-divider"></span><div class="shift-coins">${icon("money")}<strong id="coins">$0.00</strong></div><span class="hud-divider"></span><div class="shift-score">${icon("star")}<strong id="score">0<span>served</span></strong></div></div>
+    <div class="hud-actions"><button data-action="sound" id="sound" class="round-button" aria-label="Mute all audio">${icon("sound")}</button><button data-action="music" id="music" class="round-button music-button" aria-label="Mute music" aria-pressed="true" title="Mute background music">${icon("music")}</button><button data-action="chatter" id="chatter" class="round-button chatter-button" aria-label="Mute background hawker chatter" aria-pressed="true" title="Background hawker chatter">${icon("voices")}</button><button data-action="help" class="round-button" aria-label="How to play">${icon("help")}</button><button data-action="pause" id="pause" class="round-button" aria-label="Pause game">${icon("pause")}</button><button data-action="fullscreen" class="round-button fullscreen-button" aria-label="Toggle full screen">⛶</button></div>
   </header>
   <div class="location-tag"><span class="live-dot"></span><span id="day">DAY 01</span><span class="location-divider">/</span> AH HUAT’S · #01–08</div>
   <div id="tickets" class="world-tickets" aria-label="Customer orders"></div><div id="npc-speech" class="npc-speech" aria-live="polite"></div><div id="equipment-labels" class="equipment-labels"></div><div id="object-hotspots" class="object-hotspots" aria-label="Kitchen objects"></div><div id="cook-cues" class="cook-cues"></div><div id="feedback-layer" class="feedback-layer"></div><div class="view-caption" id="view-caption">CENTRE · CUSTOMERS & PLATING</div>
@@ -72,7 +79,7 @@ $("app").innerHTML = `
   <div class="game-footer"><div class="stall-state"><span class="open-dot" id="open-dot"></span><div><strong id="stall-state">COUNTER’S READY</strong><span id="queue-state">A new day in the neighbourhood</span></div></div><div class="camera-compass"><button data-action="view" data-view="-1" aria-label="Look at preparation area">COOK</button><span>·</span><button data-action="view" data-view="0" class="selected" aria-label="Look at service counter">COUNTER</button><span>·</span><button data-action="view" data-view="1" aria-label="Look at drinks area">KOPI</button></div><div class="interaction-note">${icon("spark")} <span>DRAG. COOK. SERVE.</span></div></div>
   <div class="context-hint" id="context-hint"></div><div class="game-notice" id="notice" role="status" aria-live="polite"></div>
   <section class="intro" id="intro"><div class="intro-kicker"><span></span> SMALL STALL. BIG HEART.</div><h2>The neighbourhood<br>is <em>hungry.</em></h2><p>Apron on. Step into your own little corner<br>of Singapore’s lunch-hour rush.</p><button class="play-button" data-action="start">Let’s cook! <span>▶</span></button><button class="intro-help" data-action="help">First shift? Here’s how to play ${icon("arrow")}</button><div class="intro-controls"><span>↔ <kbd>A</kbd> <kbd>D</kbd> Look around</span><span>✋ Drag objects to cook</span></div></section>
-  <div class="scene-caption" id="scene-caption"><span>01 / THE LUNCH RUSH</span><strong>One stall.<br>A thousand stories.</strong></div><div id="modal-root"></div>`;
+  <div class="scene-caption" id="scene-caption"><span>01 / THE LUNCH RUSH</span><strong>One stall.<br>A thousand stories.</strong></div><div id="status-announcement" class="sr-only" role="status" aria-live="polite"></div><div id="modal-root"></div>`;
 
 function save() {
   saved = {
@@ -82,7 +89,7 @@ function save() {
     upgrades: game.upgrades,
     sound: !muted,
     music: musicEnabled,
-    voices: voicesEnabled,
+    chatter: chatterEnabled,
     best: Math.max(saved.best || 0, game.status === "ended" ? game.served : 0),
   };
   try {
@@ -95,6 +102,8 @@ function sound(success = false) {
   audio.effect(success);
 }
 function tell(text, success = false, playSound = true) {
+  effects?.clearCards();
+  document.body.classList.add("has-notice");
   $("notice").innerHTML =
     `${icon(success ? "check" : "spark")}<span>${escape(text)}</span>`;
   $("notice").classList.add("visible");
@@ -131,6 +140,17 @@ function drop(source, target, options) {
   if (result && target.kind !== "customer") sound();
   afterInteraction();
 }
+function applyLayout() {
+  const layout = gameLayout(innerWidth, innerHeight, !!world?.view);
+  const app = $("app");
+  app.dataset.layout = layout.mode;
+  for (const [name, value] of Object.entries({
+    "order-width": layout.cardWidth,
+    "order-height": layout.cardHeight,
+  }))
+    app.style.setProperty(`--${name}`, `${value}px`);
+}
+window.addEventListener("resize", applyLayout);
 function setView(value) {
   world?.setView(value);
 }
@@ -164,13 +184,15 @@ function hint() {
   return `${icon("bowl")} <strong>Pick up a mee nest</strong> and drag it into the noodle pot. <span>Look left with A / ←</span>`;
 }
 function renderUi() {
+  applyLayout();
+  audio.setRush(rushIntensity(game.elapsed, game.duration));
   audio.setActive(game.status === "running" && !document.hidden);
   const remaining = Math.max(0, Math.ceil(game.duration - game.elapsed));
   $("time").textContent =
     `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
   $("time").classList.toggle("urgent", remaining < 30);
   $("coins").textContent = cash(game.earnings);
-  put("score", `${game.served}<span>/8</span>`);
+  put("score", `${game.served}<span>served</span>`);
   $("day").textContent = `DAY ${String(game.day).padStart(2, "0")}`;
   const ready = game.status === "ready";
   if (ready || modal) $("object-tooltip").classList.remove("visible");
@@ -211,15 +233,15 @@ function renderUi() {
       : "Mute background music"
     : "Enable background music";
   $("music").classList.toggle("is-muted", !musicEnabled || muted);
-  $("voices").setAttribute("aria-pressed", voicesEnabled);
-  $("voices").setAttribute(
+  $("chatter").setAttribute("aria-pressed", chatterEnabled);
+  $("chatter").setAttribute(
     "aria-label",
-    voicesEnabled
-      ? "Mute NPC voices and hawker chatter"
-      : "Enable NPC voices and hawker chatter",
+    chatterEnabled
+      ? "Mute background hawker chatter"
+      : "Enable background hawker chatter",
   );
-  $("voices").title = "AI NPC voices & hawker chatter";
-  $("voices").classList.toggle("is-muted", !voicesEnabled || muted);
+  $("chatter").title = "Background hawker chatter";
+  $("chatter").classList.toggle("is-muted", !chatterEnabled || muted);
   put("context-hint", hint());
   $("context-hint").classList.toggle(
     "visible",
@@ -227,7 +249,20 @@ function renderUi() {
   );
   for (const event of game.events.splice(0)) {
     if (event.feedback) {
+      $("status-announcement").textContent = event.text;
       audio.cue(event.feedback, event);
+      if (
+        [
+          "order-served",
+          "dish-served",
+          "serve-rejected",
+          "customer-left",
+        ].includes(event.feedback)
+      ) {
+        $("notice").classList.remove("visible");
+        document.body.classList.remove("has-notice");
+        noticeUntil = 0;
+      }
       effects?.handle(event);
       if (event.feedback === "customer-warning") {
         const order = game.orders.find((o) => o.id === event.orderId),
@@ -240,21 +275,21 @@ function renderUi() {
           );
           speechStates.set(order.id, {
             text: dialogue.text,
-            until: game.elapsed + Math.max(4.5, dialogue.duration + 0.6),
+            until: game.elapsed + 4.5,
             urgent: event.urgent,
-          });
-          audio.speak(dialogue, {
-            orderId: order.id,
-            pan: (game.orders.indexOf(order) - 1) * 0.45,
           });
         }
       }
-      if (["order-served", "customer-left"].includes(event.feedback))
-        audio.cancelOrder(event.orderId);
     }
     if (
       event.feedback?.startsWith("cook-") ||
-      event.feedback === "customer-warning"
+      event.feedback === "customer-warning" ||
+      [
+        "order-served",
+        "dish-served",
+        "serve-rejected",
+        "customer-left",
+      ].includes(event.feedback)
     )
       continue;
     tell(
@@ -491,6 +526,9 @@ function project(entries) {
                 : placed.x - 140;
         }
         placedCues.push({ x: cueX, y: cueY });
+        const area = world.getWorkRect();
+        cueX = Math.max(area.left + 75, Math.min(area.right - 75, cueX));
+        cueY = Math.max(area.top + 125, Math.min(area.bottom - 15, cueY));
         node.style.left = `${cueX}px`;
         node.style.top = `${cueY}px`;
         node.setAttribute(
@@ -696,10 +734,10 @@ function act(action, button) {
       save();
       renderUi();
       break;
-    case "voices":
-      voicesEnabled = !voicesEnabled;
-      audio.setVoicesEnabled(voicesEnabled);
-      if (voicesEnabled) audio.unlock();
+    case "chatter":
+      chatterEnabled = !chatterEnabled;
+      audio.setChatterEnabled(chatterEnabled);
+      if (chatterEnabled) audio.unlock();
       save();
       renderUi();
       break;
@@ -817,6 +855,7 @@ try {
     },
     onCamera: (value) => {
       $("app").dataset.view = ["left", "centre", "right"][value + 1];
+      applyLayout();
       $("view-caption").textContent = [
         "LEFT · INGREDIENTS & COOKING",
         "CENTRE · CUSTOMERS & PLATING",
@@ -853,7 +892,10 @@ try {
       renderUi();
       lastUi = now;
     }
-    if (now > noticeUntil) $("notice").classList.remove("visible");
+    if (now > noticeUntil) {
+      $("notice").classList.remove("visible");
+      document.body.classList.remove("has-notice");
+    }
     animation = requestAnimationFrame(frame);
   };
   animation = requestAnimationFrame(frame);
@@ -865,6 +907,7 @@ try {
 }
 if (import.meta.hot)
   import.meta.hot.dispose(() => {
+    window.removeEventListener("resize", applyLayout);
     cancelAnimationFrame(animation);
     audio.dispose();
     effects?.clear();

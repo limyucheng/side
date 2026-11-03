@@ -35,6 +35,19 @@ export const UPGRADES = [
 ];
 const clamp = (n, min, max) => Math.max(min, Math.min(n, max));
 export const LOST_CUSTOMER_PENALTY = 0.05;
+export function rushIntensity(elapsed, duration = 240) {
+  return (
+    0.18 + 0.82 * Math.sin(Math.PI * clamp(elapsed / duration, 0, 1)) ** 1.35
+  );
+}
+export function arrivalPacing(elapsed, duration = 240) {
+  const intensity = rushIntensity(elapsed, duration);
+  return {
+    intensity,
+    interval: 10 - intensity * 7,
+    capacity: intensity < 0.45 ? 2 : 3,
+  };
+}
 export function orderPatience(type, items, takeaway = false) {
   const base = { office: 70, regular: 80, family: 90 }[type] ?? 70;
   const preparation = items.reduce(
@@ -157,7 +170,8 @@ export class HawkerGame {
         },
       ];
     }
-    const patience = orderPatience(type, items, takeaway);
+    const patience =
+      orderPatience(type, items, takeaway) - (initial >= 0 ? 10 : 0);
     return {
       id,
       type,
@@ -748,14 +762,21 @@ export class HawkerGame {
       if (!this.orders.some((o) => o.id === this.selectedOrder))
         this.selectedOrder = this.orders[0]?.id ?? null;
     }
-    this.arrival += dt;
+    const pacing = arrivalPacing(this.elapsed, this.duration);
+    this.arrival = Math.min(this.arrival + dt, pacing.interval);
     if (
-      this.orders.length < 3 &&
-      this.arrival >= 4 &&
-      this.elapsed < this.duration - 60
+      this.orders.length < pacing.capacity &&
+      this.arrival >=
+        (this.orders.length === 0
+          ? Math.min(2, pacing.interval)
+          : pacing.interval) &&
+      this.elapsed < this.duration
     ) {
       this.arrival = 0;
-      const types = ["office", "family", "regular"];
+      const types =
+        this.duration - this.elapsed < 40
+          ? ["office"]
+          : ["office", "family", "regular"];
       const order = this.makeOrder(
         types[Math.floor(this.random() * types.length)],
       );

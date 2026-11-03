@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { COMPLAINTS, HAWKER_CHATTER } from "../src/dialogue.js";
+import { HAWKER_CHATTER } from "../src/dialogue.js";
 import { VOICE_PROFILES } from "./voice-profiles.mjs";
 const endpoint = "https://qwen-qwen3-tts.hf.space";
 const model = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign";
@@ -16,20 +16,6 @@ const destination = fileURLToPath(
 );
 await mkdir(stage, { recursive: true });
 const tasks = [];
-for (const [speaker, phases] of Object.entries(COMPLAINTS))
-  for (const [phase, lines] of Object.entries(phases))
-    lines.forEach((text, index) =>
-      tasks.push({
-        id: `${speaker}-${phase}-${index}`,
-        text,
-        profile: speaker,
-        instruct:
-          VOICE_PROFILES[speaker] +
-          (phase === "critical"
-            ? " Frustrated and emphatic, speak sharply but naturally."
-            : ""),
-      }),
-    );
 for (const line of HAWKER_CHATTER) {
   const profile = line.profile;
   tasks.push({
@@ -169,13 +155,3 @@ await writeFile(
   ) + "\n",
 );
 console.log(`Published ${clips.length} accent-directed clips.`);
-await writeFile(
-  fileURLToPath(new URL("../src/voice-durations.js", import.meta.url)),
-  "// Generated alongside the bundled voices.\nexport default " +
-    JSON.stringify(
-      Object.fromEntries(clips.map((clip) => [clip.file, clip.duration || 6])),
-      null,
-      2,
-    ) +
-    ";\n",
-);
